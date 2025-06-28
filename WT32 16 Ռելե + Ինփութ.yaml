@@ -1,0 +1,897 @@
+esphome:
+  name: "wt32-16relay-inputt" # Փոխված է dash-ով՝ խուսափելու համար hostname-ի նախազգուշացումից
+  friendly_name: WT32 16 Ռելե + Ինփութ
+  
+esp32:
+  board: wt32-eth01
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+ 
+
+# Home Assistant API-ի միացում
+api:
+  encryption:
+    key: "gO1S1of1LytBkcgkMvRtvTwNQAdgT7D7q0t5Xp59fNQ="
+  reboot_timeout: 0s  
+
+ota:
+  - platform: esphome
+    password: "ad4e867a7b02a21655b0f6b3366100f8"
+
+
+#wifi:
+  #ssid: "WIFI11"
+  #password: "3YTDX4G3E3"
+  #output_power: 17dB
+  #manual_ip:
+    #static_ip: 192.168.11.198
+    #gateway: 192.168.11.254
+    #subnet: 255.255.255.0
+    #dns1: 212.73.86.254
+    #dns2: 212.73.87.254
+  #power_save_mode: NONE
+  #fast_connect: true
+
+ethernet:
+  id: eth_client
+  type: LAN8720
+  mdc_pin: 23
+  mdio_pin: 18
+  clk_mode: GPIO0_IN  # WT32-ETH01-ի համար ճիշտ է
+  power_pin: 16
+  phy_addr: 1
+  #manual_ip:
+    #static_ip: 192.168.11.198
+    #gateway: 192.168.11.254
+    #subnet: 255.255.255.0
+    #dns1: 212.73.86.254
+    #dns2: 212.73.87.254
+  #power_save_mode: NONE
+  #fast_connect: true
+
+#mqtt:
+  #broker: 192.168.11.104  # Թարմացրու քո MQTT բրոքերի IP-ով
+  #username: "erem"
+  #password: "220417"
+  #discovery: true
+  #discovery_prefix: homeassistant
+  #reboot_timeout: 0s
+  #topic_prefix: wt32_16relay_input
+
+
+# Web Server-ի միացում (Web UI-ի համար)
+web_server:
+  port: 80
+  auth:
+    username: "admin"
+    password: "Lg220417"
+ 
+
+i2c:
+  sda: GPIO14 # WT32-ETH01-ի համար SDA pin-ը
+  scl: GPIO15  # WT32-ETH01-ի համար SCL pin-ը
+  id: bus_a # I2C bus-ի ID
+  scan: false
+  frequency: 10khz
+
+# PCF8574 ընդլայնիչներ
+# Ենթադրվում է, որ PCF8574-ների հասցեներն են 0x20, 0x21, 0x22, 0x23
+pcf8574:
+  - id: pcf_out1
+    address: 0x21
+  - id: pcf_out2
+    address: 0x20
+  - id: pcf_in1
+    address: 0x22
+  - id: pcf_in2
+    address: 0x23
+ 
+text_sensor:
+  - platform: template
+    name: "Encryption Key= (gO1S1of1LytBkcgkMvRtvTwNQAdgT7D7q0t5Xp59fNQ=)"
+
+  - platform: template
+    name: "Ethernet IP Address"
+    lambda: |-
+      if (!id(eth_client).get_ip_addresses().empty()) {
+        return id(eth_client).get_ip_addresses()[0].str();
+      } else {
+        return {"No IP"};
+      }
+    update_interval: 3600s
+
+    
+
+globals:
+  - id: relay_restore_mode
+    type: int
+    restore_value: yes
+    initial_value: '0'  # 0=OFF, 1=ON, 2=LAST
+   
+  
+
+
+# Թվային կարգավորում՝ ռելեի ակտիվացման ուշացման համար
+number:
+  - platform: template
+    name: "Ռելեի Ակտիվացման Ուշացում"
+    id: relay_activation_delay
+    min_value: 0.0 # Նվազագույն արժեքը վայրկյաններով
+    max_value: 2.0 # Առավելագույն արժեքը վայրկյաններով
+    step: 0.1 # Փոփոխման քայլը
+    unit_of_measurement: "վրկ" # Չափման միավորը
+    mode: BOX # Ցուցադրվում է որպես մուտքագրման դաշտ (կամ SLIDER)
+    initial_value: 0.0 # Սկզբնական արժեքը սարքը միացնելիս
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+
+## Ընտրովի Կարգավորումներ
+
+# Ընտրովի կարգավորում՝ սարքի աշխատանքային ռեժիմի համար
+select:
+  
+  - platform: template
+    name: "Ռելե 1 Ռեժիմ"
+    id: relay_1_mode
+    options:
+      - "toggle"
+      - "momentary"
+      - "state"
+    initial_option: "toggle"
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+  - platform: template
+    name: "Ռելե 2 Ռեժիմ"
+    id: relay_2_mode
+    options:
+      - "toggle"
+      - "momentary"
+      - "state"
+    initial_option: "toggle"
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+  - platform: template
+    name: "Ռելե 3 Ռեժիմ"
+    id: relay_3_mode
+    options:
+      - "toggle"
+      - "momentary"
+      - "state"
+    initial_option: "toggle"
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+  - platform: template
+    name: "Ռելե 4 Ռեժիմ"
+    id: relay_4_mode
+    options:
+      - "toggle"
+      - "momentary"
+      - "state"
+    initial_option: "toggle"
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+  - platform: template
+    name: "Ռելե 5 Ռեժիմ"
+    id: relay_5_mode
+    options:
+      - "toggle"
+      - "momentary"
+      - "state"
+    initial_option: "toggle"
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+  - platform: template
+    name: "Ռելե 6 Ռեժիմ"
+    id: relay_6_mode
+    options:
+      - "toggle"
+      - "momentary"
+      - "state"
+    initial_option: "toggle"
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+  - platform: template
+    name: "Ռելե 7 Ռեժիմ"
+    id: relay_7_mode
+    options:
+      - "toggle"
+      - "momentary"
+      - "state"
+    initial_option: "toggle"
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+  - platform: template
+    name: "Ռելե 8 Ռեժիմ"
+    id: relay_8_mode
+    options:
+      - "toggle"
+      - "momentary"
+      - "state"
+    initial_option: "toggle"
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+  - platform: template
+    name: "Ռելե 9 Ռեժիմ"
+    id: relay_9_mode
+    options:
+      - "toggle"
+      - "momentary"
+      - "state"
+    initial_option: "toggle"
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+  - platform: template
+    name: "Ռելե 10 Ռեժիմ"
+    id: relay_10_mode
+    options:
+      - "toggle"
+      - "momentary"
+      - "state"
+    initial_option: "toggle"
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+  - platform: template
+    name: "Ռելե 11 Ռեժիմ"
+    id: relay_11_mode
+    options:
+      - "toggle"
+      - "momentary"
+      - "state"
+    initial_option: "toggle"
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+  - platform: template
+    name: "Ռելե 12 Ռեժիմ"
+    id: relay_12_mode
+    options:
+      - "toggle"
+      - "momentary"
+      - "state"
+    initial_option: "toggle"
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+  - platform: template
+    name: "Ռելե 13 Ռեժիմ"
+    id: relay_13_mode
+    options:
+      - "toggle"
+      - "momentary"
+      - "state"
+    initial_option: "toggle"
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+  - platform: template
+    name: "Ռելե 14 Ռեժիմ"
+    id: relay_14_mode
+    options:
+      - "toggle"
+      - "momentary"
+      - "state"
+    initial_option: "toggle"
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+  - platform: template
+    name: "Ռելե 15 Ռեժիմ"
+    id: relay_15_mode
+    options:
+      - "toggle"
+      - "momentary"
+      - "state"
+    initial_option: "toggle"
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+  - platform: template
+    name: "Ռելե 16 Ռեժիմ"
+    id: relay_16_mode
+    options:
+      - "toggle"
+      - "momentary"
+      - "state"
+    initial_option: "toggle"
+    optimistic: true
+    restore_value: true  # ✅ Հիշում է վերջին ընտրված արժեքը վերագործարկումից հետո
+
+## Տեքստային Սենսորներ
+
+
+## Տեքստային Սենսորներ
+# (այստեղ այլևս չկա --- բաժանարարը, քանի որ այն հեռացրել եք)
+
+  
+switch:
+  
+  - platform: restart
+    name: "ESP Reboot"
+    id: esp_reboot
+  # Ռելեներ 1-8 (միացված pcf_out1-ին)
+  - platform: gpio
+    id: relay_1
+    name: "Relay 1"
+    pin:
+      pcf8574: pcf_out2
+      number: 7
+      mode: OUTPUT
+    inverted: true
+    restore_mode: RESTORE_DEFAULT_OFF  # Սա մնում է static
+  - platform: gpio
+    id: relay_2
+    name: "Relay 2"
+    pin:
+      pcf8574: pcf_out1
+      number: 0
+      mode: OUTPUT
+    inverted: true #ok
+    restore_mode: RESTORE_DEFAULT_OFF  # Սա մնում է static
+  - platform: gpio
+    id: relay_3
+    name: "Relay 3"
+    pin:
+      pcf8574: pcf_out2
+      number: 6
+      mode: OUTPUT
+    inverted: true # ok
+    restore_mode: RESTORE_DEFAULT_OFF  # Սա մնում է static
+  - platform: gpio
+    id: relay_4
+    name: "Relay 4"
+    pin:
+      pcf8574: pcf_out1
+      number: 1
+      mode: OUTPUT
+    inverted: true
+    restore_mode: RESTORE_DEFAULT_OFF  # Սա մնում է static
+  - platform: gpio
+    id: relay_5
+    name: "Relay 5"
+    pin:
+      pcf8574: pcf_out2
+      number: 5
+      mode: OUTPUT
+    inverted: true
+    restore_mode: RESTORE_DEFAULT_OFF  # Սա մնում է static
+  - platform: gpio
+    id: relay_6
+    name: "Relay 6"
+    pin:
+      pcf8574: pcf_out1
+      number: 2
+      mode: OUTPUT
+    inverted: true
+    restore_mode: RESTORE_DEFAULT_OFF  # Սա մնում է static
+    
+  - platform: gpio
+    id: relay_7
+    name: "Relay 7"
+    pin:
+      pcf8574: pcf_out2
+      number: 4
+      mode: OUTPUT
+    inverted: true
+    restore_mode: RESTORE_DEFAULT_OFF  # Սա մնում է static
+  - platform: gpio
+    id: relay_8
+    name: "Relay 8"
+    pin:
+      pcf8574: pcf_out1
+      number: 3
+      mode: OUTPUT
+    inverted: true
+    restore_mode: RESTORE_DEFAULT_OFF  # Սա մնում է static
+  - platform: gpio
+    id: relay_9
+    name: "Relay 9"
+    pin:
+      pcf8574: pcf_out2
+      number: 3
+      mode: OUTPUT
+    inverted: true
+    restore_mode: RESTORE_DEFAULT_OFF  # Սա մնում է static
+  - platform: gpio
+    id: relay_10
+    name: "Relay 10"
+    pin:
+      pcf8574: pcf_out1
+      number: 4
+      mode: OUTPUT
+    inverted: true
+    restore_mode: RESTORE_DEFAULT_OFF  # Սա մնում է static
+  - platform: gpio
+    id: relay_11
+    name: "Relay 11"
+    pin:
+      pcf8574: pcf_out2
+      number: 2
+      mode: OUTPUT
+    inverted: true
+    restore_mode: RESTORE_DEFAULT_OFF  # Սա մնում է static
+  - platform: gpio
+    id: relay_12
+    name: "Relay 12"
+    pin:
+      pcf8574: pcf_out1
+      number: 5
+      mode: OUTPUT
+    inverted: true
+    restore_mode: RESTORE_DEFAULT_OFF  # Սա մնում է static
+  - platform: gpio
+    id: relay_13
+    name: "Relay 13"
+    pin:
+      pcf8574: pcf_out2
+      number: 1
+      mode: OUTPUT
+    inverted: true
+    restore_mode: RESTORE_DEFAULT_OFF  # Սա մնում է static
+  - platform: gpio
+    id: relay_14
+    name: "Relay 14"
+    pin:
+      pcf8574: pcf_out1
+      number: 6
+      mode: OUTPUT
+    inverted: true
+    restore_mode: RESTORE_DEFAULT_OFF  # Սա մնում է static
+  - platform: gpio
+    id: relay_15
+    name: "Relay 15"
+    pin:
+      pcf8574: pcf_out2
+      number: 0
+      mode: OUTPUT
+    inverted: true
+    restore_mode: RESTORE_DEFAULT_OFF  # Սա մնում է static
+  - platform: gpio
+    id: relay_16
+    name: "Relay 16"
+    pin:
+      pcf8574: pcf_out1
+      number: 7
+      mode: OUTPUT
+    inverted: true
+    restore_mode: RESTORE_DEFAULT_ON
+   
+    
+      
+
+## Մուտքերի Կոնֆիգուրացիա (16 ալիք)
+
+binary_sensor:
+  - platform: gpio
+    name: INPUT 1
+    pin: 
+      pcf8574: pcf_in1
+      number: 0
+      mode: INPUT
+    filters:
+      - invert: {}
+    on_press:
+      then:
+        - delay: !lambda |-
+            return id(relay_activation_delay).state * 1000;
+        
+        - lambda: |-
+            if (id(relay_1_mode).state == "toggle") {
+              id(relay_1).toggle();
+            } else if (id(relay_1_mode).state == "momentary") {
+              id(relay_1).turn_on();
+            } else if (id(relay_1_mode).state == "state") {
+              id(relay_1).turn_on();
+            }
+    on_release:
+      then:
+        - lambda: |-
+            if (id(relay_1_mode).state == "momentary" || id(relay_1_mode).state == "state") {
+              id(relay_1).turn_off();
+            }
+      
+
+
+  - platform: gpio
+    name: INPUT 2
+    pin: 
+      pcf8574: pcf_in1
+      number: 1
+      mode: INPUT
+    filters:
+      - invert: {}
+    on_press:
+      then:
+        - delay: !lambda |-
+            return id(relay_activation_delay).state * 1000;
+        
+        - lambda: |-
+            if (id(relay_2_mode).state == "toggle") {
+              id(relay_2).toggle();
+            } else if (id(relay_2_mode).state == "momentary") {
+              id(relay_2).turn_on();
+            } else if (id(relay_2_mode).state == "state") {
+              id(relay_2).turn_on();
+            }  
+
+    on_release:
+      then:
+        - lambda: |-
+            if (id(relay_2_mode).state == "momentary" || id(relay_2_mode).state == "state") {
+              id(relay_2).turn_off();
+            }        
+  - platform: gpio
+    name: INPUT 3
+    pin: 
+      pcf8574: pcf_in1
+      number: 2
+      mode: INPUT
+    filters:
+      - invert: {}
+    on_press:
+      then:
+        - delay: !lambda |-
+            return id(relay_activation_delay).state * 1000;
+        
+        - lambda: |-
+            if (id(relay_3_mode).state == "toggle") {
+              id(relay_3).toggle();
+            } else if (id(relay_3_mode).state == "momentary") {
+              id(relay_3).turn_on();
+            } else if (id(relay_3_mode).state == "state") {
+              id(relay_3).turn_on();
+            } 
+    on_release:
+      then:
+        - lambda: |-
+            if (id(relay_3_mode).state == "momentary" || id(relay_3_mode).state == "state") {
+              id(relay_3).turn_off();
+            }         
+  - platform: gpio
+    name: INPUT 4
+    pin: 
+      pcf8574: pcf_in1
+      number: 3
+      mode: INPUT
+    filters:
+      - invert: {}
+    on_press:
+      then:
+        - delay: !lambda |-
+            return id(relay_activation_delay).state * 1000;
+       
+        - lambda: |-
+            if (id(relay_4_mode).state == "toggle") {
+              id(relay_4).toggle();
+            } else if (id(relay_4_mode).state == "momentary") {
+              id(relay_4).turn_on();
+            } else if (id(relay_4_mode).state == "state") {
+              id(relay_4).turn_on();
+            } 
+    on_release:
+      then:
+        - lambda: |-
+            if (id(relay_4_mode).state == "momentary" || id(relay_4_mode).state == "state") {
+              id(relay_4).turn_off();
+            }                   
+  - platform: gpio
+    name: INPUT 5
+    pin: 
+      pcf8574: pcf_in1
+      number: 4
+      mode: INPUT
+    filters:
+      - invert: {}
+    on_press:
+      then:
+        - delay: !lambda |-
+            return id(relay_activation_delay).state * 1000;
+        
+        - lambda: |-
+            if (id(relay_5_mode).state == "toggle") {
+              id(relay_5).toggle();
+            } else if (id(relay_5_mode).state == "momentary") {
+              id(relay_5).turn_on();
+            } else if (id(relay_5_mode).state == "state") {
+              id(relay_5).turn_on();
+            }  
+    on_release:
+      then:
+        - lambda: |-
+            if (id(relay_5_mode).state == "momentary" || id(relay_5_mode).state == "state") {
+              id(relay_5).turn_off();
+            }         
+  - platform: gpio
+    name: INPUT 6
+    pin: 
+      pcf8574: pcf_in1
+      number: 5
+      mode: INPUT
+    filters:
+      - invert: {}
+    on_press:
+      then:
+        - delay: !lambda |-
+            return id(relay_activation_delay).state * 1000;
+        
+        - lambda: |-
+            if (id(relay_6_mode).state == "toggle") {
+              id(relay_6).toggle();
+            } else if (id(relay_6_mode).state == "momentary") {
+              id(relay_6).turn_on();
+            } else if (id(relay_6_mode).state == "state") {
+              id(relay_6).turn_on();
+            } 
+    on_release:
+      then:
+        - lambda: |-
+            if (id(relay_6_mode).state == "momentary" || id(relay_6_mode).state == "state") {
+              id(relay_6).turn_off();
+            } 
+  - platform: gpio
+    name: INPUT 7
+    pin: 
+      pcf8574: pcf_in1
+      number: 6
+      mode: INPUT
+    filters:
+      - invert: {}
+    on_press:
+      then:
+        - delay: !lambda |-
+            return id(relay_activation_delay).state * 1000;
+        
+        - lambda: |-
+            if (id(relay_7_mode).state == "toggle") {
+              id(relay_7).toggle();
+            } else if (id(relay_7_mode).state == "momentary") {
+              id(relay_7).turn_on();
+            } else if (id(relay_7_mode).state == "state") {
+              id(relay_7).turn_on();
+            } 
+    on_release:
+      then:
+        - lambda: |-
+            if (id(relay_7_mode).state == "momentary" || id(relay_7_mode).state == "state") {
+              id(relay_7).turn_off();
+            }
+  - platform: gpio
+    name: INPUT 8
+    pin: 
+      pcf8574: pcf_in1
+      number: 7
+      mode: INPUT
+    filters:
+      - invert: {}
+    on_press:
+      then:
+        - delay: !lambda |-
+            return id(relay_activation_delay).state * 1000;
+         
+        - lambda: |-
+            if (id(relay_8_mode).state == "toggle") {
+              id(relay_8).toggle();
+            } else if (id(relay_8_mode).state == "momentary") {
+              id(relay_8).turn_on();
+            } else if (id(relay_8_mode).state == "state") {
+              id(relay_8).turn_on();
+            } 
+    on_release:
+      then:
+        - lambda: |-
+            if (id(relay_8_mode).state == "momentary" || id(relay_8_mode).state == "state") {
+              id(relay_8).turn_off();
+            }                               
+  - platform: gpio
+    name: INPUT 9
+    pin: 
+      pcf8574: pcf_in2
+      number: 0
+      mode: INPUT
+    filters:
+      - invert: {}
+    on_press:
+      then:
+        - delay: !lambda |-
+            return id(relay_activation_delay).state * 1000;
+         
+        - lambda: |-
+            if (id(relay_9_mode).state == "toggle") {
+              id(relay_9).toggle();
+            } else if (id(relay_9_mode).state == "momentary") {
+              id(relay_9).turn_on();
+            } else if (id(relay_9_mode).state == "state") {
+              id(relay_9).turn_on();
+            } 
+    on_release:
+      then:
+        - lambda: |-
+            if (id(relay_9_mode).state == "momentary" || id(relay_9_mode).state == "state") {
+              id(relay_9).turn_off();
+            }    
+  - platform: gpio
+    name: INPUT 10
+    pin: 
+      pcf8574: pcf_in2
+      number: 1
+      mode: INPUT
+    filters:
+      - invert: {}
+    on_press:
+      then:
+        - delay: !lambda |-
+            return id(relay_activation_delay).state * 1000;
+         
+        - lambda: |-
+            if (id(relay_10_mode).state == "toggle") {
+              id(relay_10).toggle();
+            } else if (id(relay_10_mode).state == "momentary") {
+              id(relay_10).turn_on();
+            } else if (id(relay_10_mode).state == "state") {
+              id(relay_10).turn_on();
+            } 
+    on_release:
+      then:
+        - lambda: |-
+            if (id(relay_10_mode).state == "momentary" || id(relay_10_mode).state == "state") {
+              id(relay_10).turn_off();
+            }   
+  - platform: gpio
+    name: INPUT 11
+    pin: 
+      pcf8574: pcf_in2
+      number: 2
+      mode: INPUT
+    filters:
+      - invert: {}
+    on_press:
+      then:
+        - delay: !lambda |-
+            return id(relay_activation_delay).state * 1000;
+         
+        - lambda: |-
+            if (id(relay_11_mode).state == "toggle") {
+              id(relay_11).toggle();
+            } else if (id(relay_11_mode).state == "momentary") {
+              id(relay_11).turn_on();
+            } else if (id(relay_11_mode).state == "state") {
+              id(relay_11).turn_on();
+            } 
+    on_release:
+      then:
+        - lambda: |-
+            if (id(relay_11_mode).state == "momentary" || id(relay_11_mode).state == "state") {
+              id(relay_11).turn_off();
+            }   
+  - platform: gpio
+    name: INPUT 12
+    pin: 
+      pcf8574: pcf_in2
+      number: 3
+      mode: INPUT
+    filters:
+      - invert: {}
+    on_press:
+      then:
+        - delay: !lambda |-
+            return id(relay_activation_delay).state * 1000;
+         
+        - lambda: |-
+            if (id(relay_12_mode).state == "toggle") {
+              id(relay_12).toggle();
+            } else if (id(relay_12_mode).state == "momentary") {
+              id(relay_12).turn_on();
+            } else if (id(relay_12_mode).state == "state") {
+              id(relay_12).turn_on();
+            } 
+    on_release:
+      then:
+        - lambda: |-
+            if (id(relay_12_mode).state == "momentary" || id(relay_12_mode).state == "state") {
+              id(relay_12).turn_off();
+            }                                                                        
+  - platform: gpio
+    name: INPUT 13
+    pin: 
+      pcf8574: pcf_in2
+      number: 4
+      mode: INPUT
+    filters:
+      - invert: {}
+    on_press:
+      then:
+        - delay: !lambda |-
+            return id(relay_activation_delay).state * 1000;
+         
+        - lambda: |-
+            if (id(relay_13_mode).state == "toggle") {
+              id(relay_13).toggle();
+            } else if (id(relay_13_mode).state == "momentary") {
+              id(relay_13).turn_on();
+            } else if (id(relay_13_mode).state == "state") {
+              id(relay_13).turn_on();
+            } 
+    on_release:
+      then:
+        - lambda: |-
+            if (id(relay_13_mode).state == "momentary" || id(relay_13_mode).state == "state") {
+              id(relay_13).turn_off();
+            }  
+  - platform: gpio
+    name: INPUT 14
+    pin: 
+      pcf8574: pcf_in2
+      number: 5
+      mode: INPUT
+    filters:
+      - invert: {}
+    on_press:
+      then:
+        - delay: !lambda |-
+            return id(relay_activation_delay).state * 1000;
+         
+        - lambda: |-
+            if (id(relay_14_mode).state == "toggle") {
+              id(relay_14).toggle();
+            } else if (id(relay_14_mode).state == "momentary") {
+              id(relay_14).turn_on();
+            } else if (id(relay_14_mode).state == "state") {
+              id(relay_14).turn_on();
+            } 
+    on_release:
+      then:
+        - lambda: |-
+            if (id(relay_14_mode).state == "momentary" || id(relay_14_mode).state == "state") {
+              id(relay_14).turn_off();
+            }     
+  - platform: gpio
+    name: INPUT 15
+    pin: 
+      pcf8574: pcf_in2
+      number: 6
+      mode: INPUT
+    filters:
+      - invert: {}
+    on_press:
+      then:
+        - delay: !lambda |-
+            return id(relay_activation_delay).state * 1000;
+         
+        - lambda: |-
+            if (id(relay_15_mode).state == "toggle") {
+              id(relay_15).toggle();
+            } else if (id(relay_15_mode).state == "momentary") {
+              id(relay_15).turn_on();
+            } else if (id(relay_15_mode).state == "state") {
+              id(relay_15).turn_on();
+            } 
+    on_release:
+      then:
+        - lambda: |-
+            if (id(relay_15_mode).state == "momentary" || id(relay_15_mode).state == "state") {
+              id(relay_15).turn_off();
+            }  
+  - platform: gpio
+    name: INPUT 16
+    pin: 
+      pcf8574: pcf_in2
+      number: 7
+      mode: INPUT
+    filters:
+      - invert: {}
+    on_press:
+      then:
+        - delay: !lambda |-
+            return id(relay_activation_delay).state * 1000;
+         
+        - lambda: |-
+            if (id(relay_16_mode).state == "toggle") {
+              id(relay_16).toggle();
+            } else if (id(relay_16_mode).state == "momentary") {
+              id(relay_16).turn_on();
+            } else if (id(relay_16_mode).state == "state") {
+              id(relay_16).turn_on();
+            } 
+    on_release:
+      then:
+        - lambda: |-
+            if (id(relay_16_mode).state == "momentary" || id(relay_16_mode).state == "state") {
+              id(relay_16).turn_off();
+            }                                                                                                                                  
