@@ -67,7 +67,7 @@ web_server:
   port: 80
   auth:
     username: "admin"
-    password: "Lg220417"
+    password: "admin"
  
 
 i2c:
