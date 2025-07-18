@@ -54,8 +54,8 @@ ethernet:
 
 #mqtt:
   #broker: 192.168.11.104  # Թարմացրու քո MQTT բրոքերի IP-ով
-  #username: "erem"
-  #password: "220417"
+  #username: ""
+  #password: ""
   #discovery: true
   #discovery_prefix: homeassistant
   #reboot_timeout: 0s
